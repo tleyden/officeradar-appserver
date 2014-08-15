@@ -2,6 +2,7 @@ package officeradar
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/couchbaselabs/logg"
@@ -12,6 +13,19 @@ type OfficeRadarApp struct {
 	DatabaseURL string
 	UniqushURL  string
 	Database    couch.Database
+}
+
+type OfficeRadarDoc struct {
+	Revision string `json:"_rev"`
+	Id       string `json:"_id"`
+	Type     string `json:"type"`
+}
+
+type OfficeRadarProfile struct {
+	OfficeRadarDoc
+	DeviceTokens []string `json:"deviceTokens"`
+	Name         string   `json:"name"`
+	AuthSystem   string   `json:"authSystem"`
 }
 
 type stringmap map[string]interface{}
@@ -65,6 +79,36 @@ func (o OfficeRadarApp) processChanges(changes couch.Changes) {
 
 	for _, change := range changes.Results {
 		logg.LogTo("OFFICERADAR", "change: %v", change)
+
+		if change.Deleted {
+			logg.LogTo("OFFICERADAR", "change was deleted, skipping")
+			continue
+		}
+
+		doc := OfficeRadarDoc{}
+		err := o.Database.Retrieve(change.Id, &doc)
+		if err != nil {
+			errMsg := fmt.Errorf("Didn't retrieve: %v - %v", change.Id, err)
+			logg.LogError(errMsg)
+			continue
+		}
+
+		logg.LogTo("OFFICERADAR", "doc: %+v", doc)
+		if doc.Type == "profile" {
+
+			profileDoc := OfficeRadarProfile{}
+			err := o.Database.Retrieve(change.Id, &profileDoc)
+			if err != nil {
+				errMsg := fmt.Errorf("Load fail: %v - %v", change.Id, err)
+				logg.LogError(errMsg)
+				continue
+			}
+			logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
+
+			// register this user with Uniqush
+
+		}
+
 	}
 
 }
