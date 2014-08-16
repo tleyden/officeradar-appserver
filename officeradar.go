@@ -24,13 +24,6 @@ type OfficeRadarDoc struct {
 	Type     string `json:"type"`
 }
 
-type OfficeRadarProfile struct {
-	OfficeRadarDoc
-	DeviceTokens []string `json:"deviceTokens"`
-	Name         string   `json:"name"`
-	AuthSystem   string   `json:"authSystem"`
-}
-
 type stringmap map[string]interface{}
 
 const (
@@ -105,6 +98,8 @@ func (o OfficeRadarApp) processChanges(changes couch.Changes) {
 		switch doc.Type {
 		case "profile":
 			o.processChangedProfile(change)
+		case "geofence_event":
+			o.processChangedGeofenceEvent(change)
 		}
 
 	}
@@ -123,7 +118,57 @@ func (o OfficeRadarApp) processChangedProfile(change couch.Change) {
 	logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
 
 	o.registerDeviceTokens(profileDoc)
-	o.sendPushToSubscriber(profileDoc, "Hello")
+	o.sendPushToSubscriber(profileDoc.Id, "Hello")
+
+}
+
+func (o OfficeRadarApp) processChangedGeofenceEvent(change couch.Change) {
+
+	geofenceDoc := GeofenceEvent{}
+	err := o.Database.Retrieve(change.Id, &geofenceDoc)
+	if err != nil {
+		errMsg := fmt.Errorf("Load fail: %v - %v", change.Id, err)
+		logg.LogError(errMsg)
+		return
+	}
+
+	// create the message for the alert
+	msg := o.createAlertMessage(geofenceDoc)
+
+	// send the alert to a hardcoded list of user id's (for now)
+	recipients := []string{"727846993927551"}
+	for _, recipient := range recipients {
+		o.sendPushToSubscriber(recipient, msg)
+	}
+
+}
+
+func (o OfficeRadarApp) createAlertMessage(geofenceEvent GeofenceEvent) string {
+
+	// example message: "<name> entered|exited <location>"
+
+	// find the name
+	profileDoc, err := FetchOfficeRadarProfile(o.Database, geofenceEvent.ProfileId)
+	if err != nil {
+		errMsg := fmt.Errorf("Error loading profile from %+v: %v", geofenceEvent, err)
+		logg.LogError(errMsg)
+		return "Sorry, an error occurred"
+	}
+
+	// find the beacon
+	beaconDoc, err := FetchBeacon(o.Database, geofenceEvent.BeaconId)
+	if err != nil {
+		errMsg := fmt.Errorf("Error loading beacon from %+v: %v", geofenceEvent, err)
+		logg.LogError(errMsg)
+		return "Sorry, an error occurred"
+	}
+
+	// get the action, eg, "entered" or "exited"
+	action := geofenceEvent.ActionPastTense()
+
+	msg := fmt.Sprintf("%s %s %s", profileDoc.Name, action, beaconDoc.Location)
+
+	return msg
 
 }
 
@@ -161,25 +206,25 @@ func (o OfficeRadarApp) registerDeviceTokens(profileDoc OfficeRadarProfile) {
 
 }
 
-func (o OfficeRadarApp) sendPushToSubscriber(profileDoc OfficeRadarProfile, msg string) {
+func (o OfficeRadarApp) sendPushToSubscriber(profileId string, msg string) {
 
 	endpointUrl := fmt.Sprintf("%s/push", o.UniqushURL)
 	formValues := url.Values{
 		"service":    {UNIQUSH_OFFICERADAR_SERVICE},
-		"subscriber": {profileDoc.Id},
+		"subscriber": {profileId},
 		"msg":        {msg},
 	}
 	logg.LogTo("OFFICERADAR", "post to %v with vals: %v", endpointUrl, formValues)
 
 	resp, err := http.PostForm(endpointUrl, formValues)
 	if err != nil {
-		errMsg := fmt.Errorf("Failed to send push: %v - %v", profileDoc, err)
+		errMsg := fmt.Errorf("Failed to send push to: %v - %v", profileId, err)
 		logg.LogError(errMsg)
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		errMsg := fmt.Errorf("Failed to read body: %v - %v", profileDoc, err)
+		errMsg := fmt.Errorf("Failed to read body: %v - %v", profileId, err)
 		logg.LogError(errMsg)
 	}
 	logg.LogTo("OFFICERADAR", "uniqush response body: %v", string(body))
