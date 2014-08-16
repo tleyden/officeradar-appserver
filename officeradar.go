@@ -33,6 +33,10 @@ type OfficeRadarProfile struct {
 
 type stringmap map[string]interface{}
 
+const (
+	UNIQUSH_OFFICERADAR_SERVICE = "officeradar"
+)
+
 func NewOfficeRadarApp(databaseURL string, uniqushURL string) *OfficeRadarApp {
 	return &OfficeRadarApp{
 		DatabaseURL: databaseURL,
@@ -97,22 +101,29 @@ func (o OfficeRadarApp) processChanges(changes couch.Changes) {
 		}
 
 		logg.LogTo("OFFICERADAR", "doc: %+v", doc)
-		if doc.Type == "profile" {
 
-			profileDoc := OfficeRadarProfile{}
-			err := o.Database.Retrieve(change.Id, &profileDoc)
-			if err != nil {
-				errMsg := fmt.Errorf("Load fail: %v - %v", change.Id, err)
-				logg.LogError(errMsg)
-				continue
-			}
-			logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
-
-			o.registerDeviceTokens(profileDoc)
-
+		switch doc.Type {
+		case "profile":
+			o.processChangedProfile(change)
 		}
 
 	}
+
+}
+
+func (o OfficeRadarApp) processChangedProfile(change couch.Change) {
+
+	profileDoc := OfficeRadarProfile{}
+	err := o.Database.Retrieve(change.Id, &profileDoc)
+	if err != nil {
+		errMsg := fmt.Errorf("Load fail: %v - %v", change.Id, err)
+		logg.LogError(errMsg)
+		return
+	}
+	logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
+
+	o.registerDeviceTokens(profileDoc)
+	o.sendPushToSubscriber(profileDoc, "Hello")
 
 }
 
@@ -123,7 +134,7 @@ func (o OfficeRadarApp) registerDeviceTokens(profileDoc OfficeRadarProfile) {
 	for _, deviceToken := range profileDoc.DeviceTokens {
 
 		formValues := url.Values{
-			"service":         {"officeradar"},
+			"service":         {UNIQUSH_OFFICERADAR_SERVICE},
 			"subscriber":      {profileDoc.Id},
 			"pushservicetype": {"apns"},
 			"devtoken":        {deviceToken},
@@ -147,6 +158,31 @@ func (o OfficeRadarApp) registerDeviceTokens(profileDoc OfficeRadarProfile) {
 		logg.LogTo("OFFICERADAR", "uniqush response body: %v", string(body))
 
 	}
+
+}
+
+func (o OfficeRadarApp) sendPushToSubscriber(profileDoc OfficeRadarProfile, msg string) {
+
+	endpointUrl := fmt.Sprintf("%s/push", o.UniqushURL)
+	formValues := url.Values{
+		"service":    {UNIQUSH_OFFICERADAR_SERVICE},
+		"subscriber": {profileDoc.Id},
+		"msg":        {msg},
+	}
+	logg.LogTo("OFFICERADAR", "post to %v with vals: %v", endpointUrl, formValues)
+
+	resp, err := http.PostForm(endpointUrl, formValues)
+	if err != nil {
+		errMsg := fmt.Errorf("Failed to send push: %v - %v", profileDoc, err)
+		logg.LogError(errMsg)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		errMsg := fmt.Errorf("Failed to read body: %v - %v", profileDoc, err)
+		logg.LogError(errMsg)
+	}
+	logg.LogTo("OFFICERADAR", "uniqush response body: %v", string(body))
 
 }
 
