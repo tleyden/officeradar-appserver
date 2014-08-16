@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 
 	"github.com/couchbaselabs/logg"
 	"github.com/tleyden/go-couch"
@@ -105,9 +108,43 @@ func (o OfficeRadarApp) processChanges(changes couch.Changes) {
 			}
 			logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
 
-			// register this user with Uniqush
+			o.registerDeviceTokens(profileDoc)
 
 		}
+
+	}
+
+}
+
+func (o OfficeRadarApp) registerDeviceTokens(profileDoc OfficeRadarProfile) {
+
+	endpointUrl := fmt.Sprintf("%s/subscribe", o.UniqushURL)
+
+	for _, deviceToken := range profileDoc.DeviceTokens {
+
+		formValues := url.Values{
+			"service":         {"officeradar"},
+			"subscriber":      {profileDoc.Id},
+			"pushservicetype": {"apns"},
+			"devtoken":        {deviceToken},
+		}
+		logg.LogTo("OFFICERADAR", "post to %v with vals: %v", endpointUrl, formValues)
+
+		resp, err := http.PostForm(endpointUrl, formValues)
+		if err != nil {
+			errMsg := fmt.Errorf("Failed to add uniqush subscriber: %v - %v", profileDoc, err)
+			logg.LogError(errMsg)
+			continue
+		}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			errMsg := fmt.Errorf("Failed to read body: %v - %v", profileDoc, err)
+			logg.LogError(errMsg)
+			continue
+		}
+
+		logg.LogTo("OFFICERADAR", "uniqush response body: %v", string(body))
 
 	}
 
