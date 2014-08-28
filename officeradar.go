@@ -47,30 +47,43 @@ func (o *OfficeRadarApp) InitApp() error {
 	return nil
 }
 
-func (o OfficeRadarApp) FollowChangesFeed(since interface{}) {
+func (o OfficeRadarApp) FollowChangesFeed(startingSince string) {
 
 	handleChange := func(reader io.Reader) interface{} {
 		logg.LogTo("OFFICERADAR", "handleChange() callback called")
 		changes, err := decodeChanges(reader)
-		if err == nil {
-			logg.LogTo("OFFICERADAR", "changes: %v", changes)
-
-			o.processChanges(changes)
-
-			since = changes.LastSequence
-
-		} else {
+		if err != nil {
 			logg.LogTo("OFFICERADAR", "error decoding changes: %v", err)
-
+			return nil // stop changes feed
 		}
 
+		logg.LogTo("OFFICERADAR", "changes: %v", changes)
+
+		o.processChanges(changes)
+
+		since := changes.LastSequence
 		logg.LogTo("OFFICERADAR", "returning since: %v", since)
+
 		return since
 
 	}
 
-	options := stringmap{"since": since}
+	options := map[string]interface{}{}
+	if startingSince != "" {
+		logg.LogTo("OFFICERADAR", "startingSince not empty: %v", startingSince)
+		options["since"] = startingSince
+	} else {
+		// find the sequence of most recent change
+		lastSequence, err := o.Database.LastSequence()
+		if err != nil {
+			logg.LogPanic("Error getting LastSequence: %v", err)
+			return
+		}
+		options["since"] = lastSequence
+	}
+
 	options["feed"] = "longpoll"
+	logg.LogTo("OFFICERADAR", "Following changes feed: %+v", options)
 	o.Database.Changes(handleChange, options)
 
 }
