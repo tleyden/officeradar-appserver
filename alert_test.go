@@ -73,7 +73,7 @@ func TestSurpriseAppearanceAlert(t *testing.T) {
 
 	// set a fake last seen func that says the user was just
 	// recently seen
-	alert.LastSeenFunc = func(e GeofenceEvent) (bool, time.Time) {
+	alert.LastSeenFunc = func(profileId, beaconId string) (bool, time.Time) {
 		return true, time.Now()
 	}
 
@@ -94,7 +94,7 @@ func TestSurpriseAppearanceAlert(t *testing.T) {
 
 	// set a fake last seen func that says the user hasn't been
 	// seen for three weeks
-	alert.LastSeenFunc = func(e GeofenceEvent) (bool, time.Time) {
+	alert.LastSeenFunc = func(profileId, beaconId string) (bool, time.Time) {
 		return true, time.Now().Add(-1 * 21 * 24 * time.Hour)
 	}
 

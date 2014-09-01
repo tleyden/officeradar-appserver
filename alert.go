@@ -54,9 +54,12 @@ func (a *AnyUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
 	return false, nil // no
 }
 
+// callback function to determine when is the last time we've seen
+// this user at this beacon
+type LastSeenFunc func(profileId, beaconId string) (bool, time.Time)
+
 // A geofence alert triggered if any of the specified users enter any of the specified
 // beacons after not having been seen at that beacon since minLastSeenAgo time duration.
-type LastSeenFunc func(GeofenceEvent) (bool, time.Time)
 type SurpriseAppearanceAlert struct {
 	BaseAlert
 	Users          []OfficeRadarProfile // users for which this alert can fire
@@ -86,7 +89,7 @@ func (a *SurpriseAppearanceAlert) Process(e GeofenceEvent) (bool, error) {
 	}
 
 	// have we seen this user at this beacon before?
-	haveSeen, lastSeenAt := a.LastSeenFunc(e)
+	haveSeen, lastSeenAt := a.LastSeenFunc(e.ProfileId, e.BeaconId)
 
 	// if not, consider that as being "infinite" last seen and fire alert
 	if !haveSeen {
@@ -127,10 +130,10 @@ func hasProfileOverlap(users []OfficeRadarProfile, e GeofenceEvent) bool {
 // Eg, "Send me an alert when Jens and I are in the same office within 1/2 hour of eachother"
 type AllUsersPresentAlert struct {
 	BaseAlert
-	Users    []OfficeRadarProfile // users who must be in range of beacon, within time window
-	Window   time.Duration        // max time window for user appearances of multi-user alerts
-	Beacons  []Beacon             // the beacons of interest
-	LastSeen map[string]time.Time // profileId -> lastSeen map
+	Users   []OfficeRadarProfile // users who must be in range of beacon, within time window
+	Window  time.Duration        // max time window for user appearances of multi-user alerts
+	Beacons []Beacon             // the beacons of interest
+
 }
 
 // The base geofence alert that contains fields used in all types of geofence alerts
