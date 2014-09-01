@@ -104,3 +104,64 @@ func TestSurpriseAppearanceAlert(t *testing.T) {
 	assert.True(t, fired2)
 
 }
+
+func TestAllUsersPresentAlert(t *testing.T) {
+
+	alert := NewAllUsersPresentAlert()
+
+	alert.Window = time.Hour
+
+	foo := OfficeRadarProfile{OfficeRadarDoc: OfficeRadarDoc{Id: "foo"}}
+	bar := OfficeRadarProfile{OfficeRadarDoc: OfficeRadarDoc{Id: "bar"}}
+	alert.Users = []OfficeRadarProfile{foo, bar}
+
+	beacon1 := Beacon{
+		OfficeRadarDoc: OfficeRadarDoc{Id: "fake_beacon_id1"},
+	}
+	beacon2 := Beacon{
+		OfficeRadarDoc: OfficeRadarDoc{Id: "fake_beacon_id2"},
+	}
+	alert.Beacons = []Beacon{beacon1, beacon2}
+
+	// foo hasn't been seen in two weeks
+	// bar just seen recently
+	alert.LastSeenFunc = func(profileId, beaconId string) (bool, time.Time) {
+		switch profileId {
+		case foo.Id:
+			return true, time.Now().Add(-1 * 21 * 24 * time.Hour)
+		case bar.Id:
+			return true, time.Now()
+		}
+		return false, time.Now()
+	}
+
+	createdAtNow := time.Now().Format(time.RFC3339)
+	geofenceEvent := GeofenceEvent{
+		Action:    ACTION_ENTRY,
+		BeaconId:  beacon1.Id,
+		ProfileId: bar.Id,
+		CreatedAt: createdAtNow,
+	}
+
+	// the alert should not fire
+	fired, error := alert.Process(geofenceEvent)
+	assert.True(t, error == nil)
+	assert.False(t, fired)
+
+	// foo and bar both just seen recently
+	alert.LastSeenFunc = func(profileId, beaconId string) (bool, time.Time) {
+		switch profileId {
+		case foo.Id:
+			return true, time.Now().Add(-1 * 2 * time.Minute)
+		case bar.Id:
+			return true, time.Now()
+		}
+		return false, time.Now()
+	}
+
+	// send in geofence event again, the alert should  fire
+	fired2, error := alert.Process(geofenceEvent)
+	assert.True(t, error == nil)
+	assert.True(t, fired2)
+
+}

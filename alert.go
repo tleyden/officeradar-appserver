@@ -65,7 +65,7 @@ type SurpriseAppearanceAlert struct {
 	Users          []OfficeRadarProfile // users for which this alert can fire
 	Beacons        []Beacon             // beacons for which this alert can fire
 	MinLastSeenAgo time.Duration        // user(s) must not seen at beacon for time duration
-	LastSeenFunc   LastSeenFunc         // using func makes it possible to test
+	LastSeenFunc   LastSeenFunc         // determine when last seen user at beacon
 }
 
 func NewSurpriseAppearanceAlert() *SurpriseAppearanceAlert {
@@ -130,9 +130,53 @@ func hasProfileOverlap(users []OfficeRadarProfile, e GeofenceEvent) bool {
 // Eg, "Send me an alert when Jens and I are in the same office within 1/2 hour of eachother"
 type AllUsersPresentAlert struct {
 	BaseAlert
-	Users   []OfficeRadarProfile // users who must be in range of beacon, within time window
-	Window  time.Duration        // max time window for user appearances of multi-user alerts
-	Beacons []Beacon             // the beacons of interest
+	Users        []OfficeRadarProfile // users who must be in range of beacon, within time window
+	Window       time.Duration        // max time window for user appearances of multi-user alerts
+	Beacons      []Beacon             // the beacons of interest
+	LastSeenFunc LastSeenFunc         // determine when last seen user at beacon
+}
+
+func NewAllUsersPresentAlert() *AllUsersPresentAlert {
+	alert := &AllUsersPresentAlert{}
+	alert.Type = "all_users_present_alert"
+	return alert
+}
+
+func (a *AllUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
+
+	if a.LastSeenFunc == nil {
+		logg.LogPanic("no LastSeenFunc defined.")
+	}
+
+	if !hasBeaconOverlap(a.Beacons, e) {
+		return false, nil
+	}
+
+	if !hasProfileOverlap(a.Users, e) {
+		return false, nil
+	}
+
+	// the beacon of interest is the beacon associated with this geofence
+	// event.  we know one user (eg, the one associated w/ geofence event)
+	// was recently spotted at beacon.  but, have we seen all users
+	// recently at this beacon?
+	for _, user := range a.Users {
+		haveSeen, lastSeenAt := a.LastSeenFunc(user.Id, e.BeaconId)
+		if !haveSeen {
+			return false, nil
+		}
+
+		// has this user been seen recently enough?
+		durationSinceLastSeen := time.Since(lastSeenAt)
+
+		if durationSinceLastSeen > a.Window {
+			return false, nil
+		}
+
+	}
+
+	// if we made it this far, alert fires
+	return true, nil
 
 }
 
