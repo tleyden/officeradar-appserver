@@ -50,17 +50,29 @@ func (o *OfficeRadarApp) InitApp() error {
 
 func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 
+	db := o.Database
+
 	alert := NewAnyUsersPresentAlert()
+
+	// it's necessary to set an id, because otherwise it will default to
+	// empty string id (as opposed to not including id in json), which
+	// causes sync gateway to return an error (technically a 301)
+	alert.Id = "hardcoded_alert_1"
+
+	retrievedAlert := &AnyUsersPresentAlert{}
+	err := db.Retrieve(alert.Id, retrievedAlert)
+	if err == nil {
+		logg.LogTo("OFFICERADAR", "already have alert, skip adding alert")
+		return nil
+	}
 
 	sfBeaconId := "sfBeaconId" // replace w/ real id
 	mvBeaconId := "mvBeaconId"
 	jensId := "jensId"
 	traunsId := "traunsId"
 
-	db := o.Database
-
 	sfBeacon := Beacon{}
-	err := db.Retrieve(sfBeaconId, &sfBeacon)
+	err = db.Retrieve(sfBeaconId, &sfBeacon)
 	if err != nil {
 		logg.LogPanic("Could not find beacon: %v", err)
 	}
@@ -181,7 +193,6 @@ func (o OfficeRadarApp) processChangedProfile(change couch.Change) {
 	logg.LogTo("OFFICERADAR", "profileDoc: %+v", profileDoc)
 
 	o.registerDeviceTokens(profileDoc)
-	o.sendPushToSubscriber(profileDoc.Id, "Hello")
 
 }
 
@@ -195,7 +206,7 @@ func (o OfficeRadarApp) processChangedGeofenceEvent(change couch.Change) {
 		return
 	}
 
-	o.noisyTempAlert(geofenceDoc)
+	// o.noisyTempAlert(geofenceDoc)
 
 	o.triggerAlerts(geofenceDoc)
 
@@ -247,9 +258,31 @@ func (o OfficeRadarApp) invokeActions(alert Alerter, geofenceEvent GeofenceEvent
 
 // Use a view query to find all active alerts
 func (o OfficeRadarApp) findActiveAlerts() ([]Alerter, error) {
+
+	db := o.Database
+
+	alerters := []Alerter{}
+	alertIds := []string{"hardcoded_alert_1"}
+	for _, alertId := range alertIds {
+		retrievedAlert := &BaseAlert{}
+		err := db.Retrieve(alertId, retrievedAlert)
+		if err != nil {
+			return []Alerter{}, err
+		}
+		switch retrievedAlert.Type {
+		case DOC_TYPE_ANY_USERS_PRESENT_ALERT:
+			alert := &AnyUsersPresentAlert{}
+			err := db.Retrieve(alertId, alert)
+			if err != nil {
+				return []Alerter{}, err
+			}
+			alerters = append(alerters, alert)
+		}
+	}
+
 	// TODO: query view via go-couchdb
-	// Based on type field, instantiate correct alert instance from doc json
-	return []Alerter{}, nil
+
+	return alerters, nil
 
 }
 

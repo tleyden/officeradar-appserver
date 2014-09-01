@@ -39,6 +39,12 @@ func main() {
 	if err != nil {
 		logg.LogPanic("Error initializing officeradar app: %v", err)
 	}
+
+	err = officeRadarApp.InitHardcodedAlerts()
+	if err != nil {
+		logg.LogPanic("Error initializing hardcoded alerts: %v", err)
+	}
+
 	go officeRadarApp.FollowChangesFeed(*since)
 
 	select {} // block forever

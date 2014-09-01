@@ -22,6 +22,10 @@ Alert examples
     - Note: this is persistent/ongoing
 */
 
+const (
+	DOC_TYPE_ANY_USERS_PRESENT_ALERT = "any_users_present_alert"
+)
+
 // A geofence alert triggered if any of the users enters within range of a specific beacon.
 // Useful for things like leaving notes at a beacon for anyone who enters the region,
 // Eg, "Can the first person into the office clean up the happy hour messs?"
@@ -33,7 +37,7 @@ type AnyUsersPresentAlert struct {
 
 func NewAnyUsersPresentAlert() *AnyUsersPresentAlert {
 	alert := &AnyUsersPresentAlert{}
-	alert.Type = "any_users_present_alert"
+	alert.Type = DOC_TYPE_ANY_USERS_PRESENT_ALERT
 	return alert
 }
 
