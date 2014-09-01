@@ -1,6 +1,10 @@
 package officeradar
 
-import "time"
+import (
+	"time"
+
+	"github.com/couchbaselabs/logg"
+)
 
 /*
 Alert examples
@@ -50,24 +54,83 @@ func (a *AnyUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
 	return false, nil // no
 }
 
+// A geofence alert triggered if any of the specified users enter any of the specified
+// beacons after not having been seen at that beacon since minLastSeenAgo time duration.
+type LastSeenFunc func(GeofenceEvent) (bool, time.Time)
+type SurpriseAppearanceAlert struct {
+	BaseAlert
+	Users          []OfficeRadarProfile // users for which this alert can fire
+	Beacons        []Beacon             // beacons for which this alert can fire
+	MinLastSeenAgo time.Duration        // user(s) must not seen at beacon for time duration
+	LastSeenFunc   LastSeenFunc         // using func makes it possible to test
+}
+
+func NewSurpriseAppearanceAlert() *SurpriseAppearanceAlert {
+	alert := &SurpriseAppearanceAlert{}
+	alert.Type = "surprise_appearance_alert"
+	return alert
+}
+
+func (a *SurpriseAppearanceAlert) Process(e GeofenceEvent) (bool, error) {
+
+	if a.LastSeenFunc == nil {
+		logg.LogPanic("no LastSeenFunc defined.")
+	}
+
+	if !hasBeaconOverlap(a.Beacons, e) {
+		return false, nil
+	}
+
+	if !hasProfileOverlap(a.Users, e) {
+		return false, nil
+	}
+
+	// have we seen this user at this beacon before?
+	haveSeen, lastSeenAt := a.LastSeenFunc(e)
+
+	// if not, consider that as being "infinite" last seen and fire alert
+	if !haveSeen {
+		logg.LogTo("OFFICERADAR", "!haveSeen")
+		return true, nil
+	}
+
+	durationSinceLastSeen := time.Since(lastSeenAt)
+
+	// the duration since last seen must be GTE MinLastSeenAgo
+	if durationSinceLastSeen >= a.MinLastSeenAgo {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func hasBeaconOverlap(beacons []Beacon, e GeofenceEvent) bool {
+	for _, beacon := range beacons {
+		if beacon.Id == e.BeaconId {
+			return true
+		}
+	}
+	return false
+}
+
+func hasProfileOverlap(users []OfficeRadarProfile, e GeofenceEvent) bool {
+	for _, user := range users {
+		if user.Id == e.ProfileId {
+			return true
+		}
+	}
+	return false
+}
+
 // A geofence alert triggered if all of the users enter within range of one the
 // beacons in the list of beacons, within the specified time window.
 // Eg, "Send me an alert when Jens and I are in the same office within 1/2 hour of eachother"
 type AllUsersPresentAlert struct {
 	BaseAlert
-	Users  []OfficeRadarProfile // users who must be in range of beacon, within time window
-	Window time.Duration        // max time window for user appearances of multi-user alerts
-	Beacon []Beacon             // the beacons of interest
-	State  map[string]time.Time // which users have been seen so far
-}
-
-// A geofence alert triggered if any of the specified users enter any of the specified
-// beacons after not having been seen at that beacon since minLastSeenAgo time duration.
-type SurpriseAppearanceAlert struct {
-	BaseAlert
-	Users          []OfficeRadarProfile // users for which this alert can fire
-	Beacon         []Beacon             // beacons for which this alert can fire
-	MinLastSeenAgo time.Duration        // user(s) must not seen at beacon for time duration
+	Users    []OfficeRadarProfile // users who must be in range of beacon, within time window
+	Window   time.Duration        // max time window for user appearances of multi-user alerts
+	Beacons  []Beacon             // the beacons of interest
+	LastSeen map[string]time.Time // profileId -> lastSeen map
 }
 
 // The base geofence alert that contains fields used in all types of geofence alerts
