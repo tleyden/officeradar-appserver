@@ -19,6 +19,7 @@ type OfficeRadarApp struct {
 }
 
 type OfficeRadarDoc struct {
+	database couch.Database
 	Revision string `json:"_rev"`
 	Id       string `json:"_id"`
 	Type     string `json:"type"`
@@ -145,8 +146,60 @@ func (o OfficeRadarApp) processChangedGeofenceEvent(change couch.Change) {
 		return
 	}
 
+	o.noisyTempAlert(geofenceDoc)
+
+	o.triggerAlerts(geofenceDoc)
+
+}
+
+func (o OfficeRadarApp) triggerAlerts(geofenceEvent GeofenceEvent) {
+
+	activeAlerts, err := o.findActiveAlerts()
+	if err != nil {
+		errMsg := fmt.Errorf("Failed to find active alerts: %v", err)
+		logg.LogError(errMsg)
+		return
+	}
+
+	for _, alert := range activeAlerts {
+
+		result, err := alert.Process(geofenceEvent)
+		if err != nil {
+			// TODO: handle failed alert by logging it and
+			// deleting the alert
+			continue
+		}
+
+		logg.LogTo("OFFICERADAR", "alert result: %v", result)
+
+		// alert.InvokeA
+
+		// if true, then invoke actions associated with alert
+
+		// if it's sticky, then:
+		// create a new alert based on previous alert, (but don't copy over state)
+		// set the activeOn time to current time + reactivateAfter
+
+		// delete the alert
+
+	}
+
+}
+
+// Use a view query to find all active alerts
+func (o OfficeRadarApp) findActiveAlerts() ([]Alerter, error) {
+	// TODO: query view via go-couchdb
+	// Based on type field, instantiate correct alert instance from doc json
+	return []Alerter{}, nil
+
+}
+
+// This was added temporarily to test alerts.  This will get removed once
+// the real alerts system is in place.
+func (o OfficeRadarApp) noisyTempAlert(geofenceEvent GeofenceEvent) {
+
 	// create the message for the alert
-	msg := o.createAlertMessage(geofenceDoc)
+	msg := o.createAlertMessage(geofenceEvent)
 
 	// send the alert to a hardcoded list of user id's (for now)
 	recipients := []string{"727846993927551"}

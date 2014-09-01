@@ -1,5 +1,10 @@
 package officeradar
 
+const (
+	ACTION_ENTRY = "entry"
+	ACTION_EXIT  = "exit"
+)
+
 type GeofenceEvent struct {
 	OfficeRadarDoc
 	Action    string `json:"action"`
@@ -11,9 +16,9 @@ type GeofenceEvent struct {
 func (e GeofenceEvent) ActionPastTense() string {
 
 	switch e.Action {
-	case "entry":
+	case ACTION_ENTRY:
 		return "entered"
-	case "exit":
+	case ACTION_EXIT:
 		return "exited"
 	}
 	return "error"
