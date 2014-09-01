@@ -74,7 +74,6 @@ func TestSurpriseAppearanceAlert(t *testing.T) {
 	// set a fake last seen func that says the user was just
 	// recently seen
 	alert.LastSeenFunc = func(e GeofenceEvent) (bool, time.Time) {
-		logg.LogTo("TEST", "lastSeenFunc called")
 		return true, time.Now()
 	}
 
@@ -92,5 +91,16 @@ func TestSurpriseAppearanceAlert(t *testing.T) {
 	fired, error := alert.Process(geofenceEvent)
 	assert.True(t, error == nil)
 	assert.False(t, fired)
+
+	// set a fake last seen func that says the user hasn't been
+	// seen for three weeks
+	alert.LastSeenFunc = func(e GeofenceEvent) (bool, time.Time) {
+		return true, time.Now().Add(-1 * 21 * 24 * time.Hour)
+	}
+
+	// send in geofence event again, the alert should fire this time
+	fired2, error := alert.Process(geofenceEvent)
+	assert.True(t, error == nil)
+	assert.True(t, fired2)
 
 }
