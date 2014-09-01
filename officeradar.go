@@ -165,23 +165,33 @@ func (o OfficeRadarApp) triggerAlerts(geofenceEvent GeofenceEvent) {
 
 		result, err := alert.Process(geofenceEvent)
 		if err != nil {
-			// TODO: handle failed alert by logging it and
-			// deleting the alert
+			errMsg := fmt.Errorf("Alert failed to process event: %v", err)
+			logg.LogError(errMsg)
 			continue
 		}
 
 		logg.LogTo("OFFICERADAR", "alert result: %v", result)
 
-		// alert.InvokeA
+		// invoke actions associated with alert
+		o.invokeActions(alert, geofenceEvent)
 
-		// if true, then invoke actions associated with alert
+		alert.RescheduleOrDelete()
 
-		// if it's sticky, then:
-		// create a new alert based on previous alert, (but don't copy over state)
-		// set the activeOn time to current time + reactivateAfter
+	}
 
-		// delete the alert
+}
 
+func (o OfficeRadarApp) invokeActions(alert Alerter, geofenceEvent GeofenceEvent) {
+
+	defaultActionFunc := func(action AlertAction) error {
+		logg.LogTo("OFFICERADAR", "fake invoke action on: %+v", action)
+		return nil
+	}
+	err := alert.PerformActions(defaultActionFunc)
+	if err != nil {
+		errMsg := fmt.Errorf("Alert failed to perform actions: %v", err)
+		logg.LogError(errMsg)
+		return
 	}
 
 }

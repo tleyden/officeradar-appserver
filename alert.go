@@ -189,8 +189,37 @@ type BaseAlert struct {
 	ActiveOn        time.Time     // the time after which this alert becomes active
 }
 
+type ActionFunc func(AlertAction) error
+
+func (a *BaseAlert) PerformActions(actionFunc ActionFunc) error {
+	for _, action := range a.Actions {
+		err := actionFunc(action)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *BaseAlert) RescheduleOrDelete() error {
+
+	// if it's sticky, then update the alert's activeOn time
+	if a.Sticky {
+		a.ActiveOn = time.Now().Add(a.ReactivateAfter)
+		_, err := a.database.Edit(a)
+		return err
+	}
+
+	// otherwise, delete the alert
+	err := a.database.Delete(a.Id, a.Revision)
+	return err
+
+}
+
 type Alerter interface {
 	Process(geofenceEvent GeofenceEvent) (bool, error)
+	PerformActions(actionFunc ActionFunc) error
+	RescheduleOrDelete() error
 }
 
 type AlertAction struct {
