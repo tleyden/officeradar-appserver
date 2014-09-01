@@ -48,6 +48,55 @@ func (o *OfficeRadarApp) InitApp() error {
 	return nil
 }
 
+func (o *OfficeRadarApp) InitHardcodedAlerts() error {
+
+	alert := NewAnyUsersPresentAlert()
+
+	sfBeaconId := "sfBeaconId" // replace w/ real id
+	mvBeaconId := "mvBeaconId"
+	jensId := "jensId"
+	traunsId := "traunsId"
+
+	db := o.Database
+
+	sfBeacon := Beacon{}
+	err := db.Retrieve(sfBeaconId, &sfBeacon)
+	if err != nil {
+		logg.LogPanic("Could not find beacon: %v", err)
+	}
+
+	mvBeacon := Beacon{}
+	err = db.Retrieve(mvBeaconId, &mvBeacon)
+	if err != nil {
+		logg.LogPanic("Could not find beacon: %v", err)
+	}
+	logg.LogTo("OFFICERADAR", "mvBeacon: %v", mvBeacon)
+
+	jensProfile := OfficeRadarProfile{}
+	err = db.Retrieve(jensId, &jensProfile)
+	if err != nil {
+		logg.LogPanic("Could not find profile: %v", err)
+	}
+
+	traunsProfile := OfficeRadarProfile{}
+	err = db.Retrieve(traunsId, &traunsProfile)
+	if err != nil {
+		logg.LogPanic("Could not find profile: %v", err)
+	}
+
+	alert.Users = []OfficeRadarProfile{jensProfile, traunsProfile}
+	alert.Beacon = sfBeacon
+
+	id, rev, err := db.Insert(alert)
+	if err != nil {
+		logg.LogPanic("Could not create alert: %v", err)
+	}
+
+	logg.LogTo("OFFICERADAR", "created alert id: %v rev: %v", id, rev)
+	return nil
+
+}
+
 func (o OfficeRadarApp) FollowChangesFeed(startingSince string) {
 
 	handleChange := func(reader io.Reader) interface{} {
