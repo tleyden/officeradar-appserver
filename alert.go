@@ -34,7 +34,20 @@ func NewAnyUsersPresentAlert() *AnyUsersPresentAlert {
 }
 
 func (a *AnyUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
-	return true, nil
+
+	// does the beacon for this geofence event match the beacon of interest?
+	if e.BeaconId != a.Beacon.Id {
+		return false, nil
+	}
+
+	// is the user associated with this event in our list of users?
+	for _, profile := range a.Users {
+		if profile.Id == e.ProfileId {
+			return true, nil // yes
+		}
+	}
+
+	return false, nil // no
 }
 
 // A geofence alert triggered if all of the users enter within range of one the
