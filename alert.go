@@ -43,8 +43,12 @@ func NewAnyUsersPresentAlert() *AnyUsersPresentAlert {
 
 func (a *AnyUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
 
+	logg.LogTo("OFFICERADAR", "AnyUsersPresentAlert.Process() called")
+
 	// does the beacon for this geofence event match the beacon of interest?
 	if e.BeaconId != a.Beacon.Id {
+		logg.LogTo("OFFICERADAR", "beacon id of event does not match alert, ignoring")
+		logg.LogTo("OFFICERADAR", "event: %+v alert: %+v", e, a)
 		return false, nil
 	}
 
@@ -54,8 +58,28 @@ func (a *AnyUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
 			return true, nil // yes
 		}
 	}
+	logg.LogTo("OFFICERADAR", "no users match alert, ignoring")
+	logg.LogTo("OFFICERADAR", "event: %+v alert: %+v", e, a)
 
 	return false, nil // no
+}
+
+// TODO: code review.  This method duplicated in several
+// places because putting in the basealert was nixing all the
+// non-basealert json fields
+func (a *AnyUsersPresentAlert) RescheduleOrDelete() error {
+
+	// if it's sticky, then update the alert's activeOn time
+	if a.Sticky {
+		a.ActiveOn = time.Now().Add(a.ReactivateAfter)
+		_, err := a.database.Edit(a)
+		return err
+	}
+
+	// otherwise, delete the alert
+	err := a.database.Delete(a.Id, a.Revision)
+	return err
+
 }
 
 // callback function to determine when is the last time we've seen
@@ -109,6 +133,21 @@ func (a *SurpriseAppearanceAlert) Process(e GeofenceEvent) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (a *SurpriseAppearanceAlert) RescheduleOrDelete() error {
+
+	// if it's sticky, then update the alert's activeOn time
+	if a.Sticky {
+		a.ActiveOn = time.Now().Add(a.ReactivateAfter)
+		_, err := a.database.Edit(a)
+		return err
+	}
+
+	// otherwise, delete the alert
+	err := a.database.Delete(a.Id, a.Revision)
+	return err
+
 }
 
 func hasBeaconOverlap(beacons []Beacon, e GeofenceEvent) bool {
@@ -184,6 +223,21 @@ func (a *AllUsersPresentAlert) Process(e GeofenceEvent) (bool, error) {
 
 }
 
+func (a *AllUsersPresentAlert) RescheduleOrDelete() error {
+
+	// if it's sticky, then update the alert's activeOn time
+	if a.Sticky {
+		a.ActiveOn = time.Now().Add(a.ReactivateAfter)
+		_, err := a.database.Edit(a)
+		return err
+	}
+
+	// otherwise, delete the alert
+	err := a.database.Delete(a.Id, a.Revision)
+	return err
+
+}
+
 // The base geofence alert that contains fields used in all types of geofence alerts
 type BaseAlert struct {
 	OfficeRadarDoc
@@ -208,24 +262,14 @@ func (a *BaseAlert) PerformActions(actionFunc ActionFunc) error {
 	return nil
 }
 
-func (a *BaseAlert) RescheduleOrDelete() error {
-
-	// if it's sticky, then update the alert's activeOn time
-	if a.Sticky {
-		a.ActiveOn = time.Now().Add(a.ReactivateAfter)
-		_, err := a.database.Edit(a)
-		return err
-	}
-
-	// otherwise, delete the alert
-	err := a.database.Delete(a.Id, a.Revision)
-	return err
-
-}
-
 type Alerter interface {
+
+	// Given a geofence event, return whether the alert should fire or not.
+	// If there was an error processing the event, return the error.
 	Process(geofenceEvent GeofenceEvent) (bool, error)
+
 	PerformActions(actionFunc ActionFunc) error
+
 	RescheduleOrDelete() error
 }
 

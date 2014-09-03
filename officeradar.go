@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/couchbaselabs/logg"
 	"github.com/tleyden/go-couch"
@@ -90,7 +91,7 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 	if err != nil {
 		logg.LogPanic("Could not find beacon: %v", err)
 	}
-	logg.LogTo("OFFICERADAR", "macBeacon: %v", macBeacon)
+	logg.LogTo("OFFICERADAR", "macBeacon: %+v", macBeacon)
 
 	jensProfile := OfficeRadarProfile{}
 	err = db.Retrieve(jensId, &jensProfile)
@@ -106,6 +107,14 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 
 	alert.Users = []OfficeRadarProfile{jensProfile, traunsProfile}
 	alert.Beacon = macBeacon
+
+	action := AlertAction{
+		Recipient: "727846993927551",
+		Message:   "Jens or Traun passed by a beacon",
+	}
+	alert.Actions = []AlertAction{action}
+	alert.Sticky = true
+	alert.ReactivateAfter = time.Second * 30
 
 	id, rev, err := db.Insert(alert)
 	if err != nil {
@@ -231,19 +240,27 @@ func (o OfficeRadarApp) triggerAlerts(geofenceEvent GeofenceEvent) {
 
 	for _, alert := range activeAlerts {
 
-		result, err := alert.Process(geofenceEvent)
+		shouldFire, err := alert.Process(geofenceEvent)
 		if err != nil {
 			errMsg := fmt.Errorf("Alert failed to process event: %v", err)
 			logg.LogError(errMsg)
 			continue
 		}
 
-		logg.LogTo("OFFICERADAR", "alert.Process() returned shouldFire = %v", result)
+		logg.LogTo("OFFICERADAR", "alert.Process(): shouldFire = %v", shouldFire)
+
+		if !shouldFire {
+			continue
+		}
 
 		// invoke actions associated with alert
 		o.invokeActions(alert, geofenceEvent)
 
-		alert.RescheduleOrDelete()
+		err = alert.RescheduleOrDelete()
+		if err != nil {
+			errMsg := fmt.Errorf("Unable to reschedule or delete alert %+v: err: %v", alert, err)
+			logg.LogError(errMsg)
+		}
 
 	}
 
@@ -288,11 +305,6 @@ func (o OfficeRadarApp) findActiveAlerts() ([]Alerter, error) {
 			if err != nil {
 				return []Alerter{}, err
 			}
-			action := AlertAction{
-				Recipient: "727846993927551",
-				Message:   "Jens or Traun passed by a beacon",
-			}
-			alert.Actions = []AlertAction{action}
 			alerters = append(alerters, alert)
 		}
 	}
