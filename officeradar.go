@@ -66,10 +66,11 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 		return nil
 	}
 
-	sfBeaconId := "sfBeaconId" // replace w/ real id
-	mvBeaconId := "mvBeaconId"
-	jensId := "jensId"
-	traunsId := "traunsId"
+	sfBeaconId := "df7172f4e29b4d10881229810b9af710"
+	mvBeaconId := "4a83813db6ce76e9618793cf483cfa10"
+	macBeaconId := "b18b572cb8a4ea6d5ce12b4620c7b90f"
+	jensId := "242941625916974"
+	traunsId := "727846993927551"
 
 	sfBeacon := Beacon{}
 	err = db.Retrieve(sfBeaconId, &sfBeacon)
@@ -84,6 +85,13 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 	}
 	logg.LogTo("OFFICERADAR", "mvBeacon: %v", mvBeacon)
 
+	macBeacon := Beacon{}
+	err = db.Retrieve(macBeaconId, &macBeacon)
+	if err != nil {
+		logg.LogPanic("Could not find beacon: %v", err)
+	}
+	logg.LogTo("OFFICERADAR", "macBeacon: %v", macBeacon)
+
 	jensProfile := OfficeRadarProfile{}
 	err = db.Retrieve(jensId, &jensProfile)
 	if err != nil {
@@ -97,7 +105,7 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 	}
 
 	alert.Users = []OfficeRadarProfile{jensProfile, traunsProfile}
-	alert.Beacon = sfBeacon
+	alert.Beacon = macBeacon
 
 	id, rev, err := db.Insert(alert)
 	if err != nil {
@@ -230,7 +238,7 @@ func (o OfficeRadarApp) triggerAlerts(geofenceEvent GeofenceEvent) {
 			continue
 		}
 
-		logg.LogTo("OFFICERADAR", "alert result: %v", result)
+		logg.LogTo("OFFICERADAR", "alert.Process() returned shouldFire = %v", result)
 
 		// invoke actions associated with alert
 		o.invokeActions(alert, geofenceEvent)
@@ -244,10 +252,13 @@ func (o OfficeRadarApp) triggerAlerts(geofenceEvent GeofenceEvent) {
 func (o OfficeRadarApp) invokeActions(alert Alerter, geofenceEvent GeofenceEvent) {
 
 	defaultActionFunc := func(action AlertAction) error {
-		logg.LogTo("OFFICERADAR", "fake invoke action on: %+v", action)
+		logg.LogTo("OFFICERADAR", "invoke action on: %+v", action)
+		o.sendPushToSubscriber(action.Recipient, action.Message)
 		return nil
 	}
+	logg.LogTo("OFFICERADAR", "perform action: %v", defaultActionFunc)
 	err := alert.PerformActions(defaultActionFunc)
+	logg.LogTo("OFFICERADAR", "performed action: %v", defaultActionFunc)
 	if err != nil {
 		errMsg := fmt.Errorf("Alert failed to perform actions: %v", err)
 		logg.LogError(errMsg)
@@ -272,10 +283,16 @@ func (o OfficeRadarApp) findActiveAlerts() ([]Alerter, error) {
 		switch retrievedAlert.Type {
 		case DOC_TYPE_ANY_USERS_PRESENT_ALERT:
 			alert := &AnyUsersPresentAlert{}
+			alert.database = db
 			err := db.Retrieve(alertId, alert)
 			if err != nil {
 				return []Alerter{}, err
 			}
+			action := AlertAction{
+				Recipient: "727846993927551",
+				Message:   "Jens or Traun passed by a beacon",
+			}
+			alert.Actions = []AlertAction{action}
 			alerters = append(alerters, alert)
 		}
 	}

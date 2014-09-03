@@ -196,6 +196,9 @@ type BaseAlert struct {
 type ActionFunc func(AlertAction) error
 
 func (a *BaseAlert) PerformActions(actionFunc ActionFunc) error {
+	if len(a.Actions) == 0 {
+		logg.LogTo("OFFICERADAR", "alert %v has no actions", a)
+	}
 	for _, action := range a.Actions {
 		err := actionFunc(action)
 		if err != nil {
@@ -227,8 +230,8 @@ type Alerter interface {
 }
 
 type AlertAction struct {
-	Recipient OfficeRadarProfile // the user that will receive a message
-	Message   string             // the message to be sent
+	Recipient string // the profile id that will receive a message
+	Message   string // the message to be sent
 }
 
 type AlertHandler func([]AlertAction)
