@@ -1,7 +1,7 @@
 
 This is the app server for [office-radar](https://github.com/tleyden/office-radar), which is an example app built on top of [Couchbase Lite](https://github.com/couchbase/couchbase-lite-ios).
 
-Here's the overall architecture for OfficeRadar, and this repository contains the code that corresponds to the yellow box.
+Here's the overall architecture for OfficeRadar.  This repository contains the code that corresponds to the yellow box.
 
 ![architecture diagram](http://tleyden-misc.s3.amazonaws.com/blog_images/officeradar_appserver_architecture.png)
 
