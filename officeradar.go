@@ -128,19 +128,24 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 
 func (o OfficeRadarApp) FollowChangesFeed(startingSince string) {
 
+	var since interface{}
+
 	handleChange := func(reader io.Reader) interface{} {
 		logg.LogTo("OFFICERADAR", "handleChange() callback called")
 		changes, err := decodeChanges(reader)
 		if err != nil {
-			logg.LogTo("OFFICERADAR", "error decoding changes: %v", err)
-			return nil // stop changes feed
+			// it's very common for this to timeout while waiting for new changes.
+			// since we want to follow the changes feed forever, just log an error
+			// TODO: don't even log an error if its an io.Timeout, just noise
+			logg.LogTo("OFFICERADAR", "%T decoding changes: %v.", err, err)
+			return since
 		}
 
 		logg.LogTo("OFFICERADAR", "changes: %v", changes)
 
 		o.processChanges(changes)
 
-		since := changes.LastSequence
+		since = changes.LastSequence
 		logg.LogTo("OFFICERADAR", "returning since: %v", since)
 
 		return since
@@ -150,7 +155,7 @@ func (o OfficeRadarApp) FollowChangesFeed(startingSince string) {
 	options := map[string]interface{}{}
 	if startingSince != "" {
 		logg.LogTo("OFFICERADAR", "startingSince not empty: %v", startingSince)
-		options["since"] = startingSince
+		since = startingSince
 	} else {
 		// find the sequence of most recent change
 		lastSequence, err := o.Database.LastSequence()
@@ -158,9 +163,10 @@ func (o OfficeRadarApp) FollowChangesFeed(startingSince string) {
 			logg.LogPanic("Error getting LastSequence: %v", err)
 			return
 		}
-		options["since"] = lastSequence
+		since = lastSequence
 	}
 
+	options["since"] = since
 	options["feed"] = "longpoll"
 	logg.LogTo("OFFICERADAR", "Following changes feed: %+v", options)
 	o.Database.Changes(handleChange, options)
