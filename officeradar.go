@@ -106,7 +106,7 @@ func (o *OfficeRadarApp) InitHardcodedAlerts() error {
 	}
 
 	alert.Users = []OfficeRadarProfile{jensProfile, traunsProfile}
-	alert.Beacon = macBeacon
+	alert.Beacon = sfBeacon
 
 	action := AlertAction{
 		Recipient: "727846993927551",
