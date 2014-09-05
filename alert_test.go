@@ -22,7 +22,7 @@ func TestAnyUsersPresentAlert(t *testing.T) {
 	bar := OfficeRadarProfile{OfficeRadarDoc: OfficeRadarDoc{Id: "bar"}}
 
 	action := AlertAction{
-		Recipient: foo,
+		Recipient: foo.Id,
 		Message:   "yo",
 	}
 	alert.Actions = []AlertAction{action}
